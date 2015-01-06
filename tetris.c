@@ -8,46 +8,35 @@
 
 enum direction {LEFT, RIGHT, DOWN};
 
-struct matrix {
-  int length;
-  int* xs;
-  int* ys;
-};
-
-struct pointvector {
-  struct point* pt;
-  struct pointvector* next;
-};
-
-struct point {
+struct pointlist {
   int x;
   int y;
+  struct pointlist* next;
 };
 
 struct piece {
-  struct matrix* matrix;
+  struct pointlist* pointlist;
   char sign;
   int color;
 };
 
-struct bottom {
+struct bottomlist {
   struct piece* piece;
-  struct list* next;
+  struct bottomlist* next;
 };
 
 
 void draw_piece(WINDOW* win, struct piece* piece){
-  int i;
-  for(i = 0; i < piece->matrix->length; i++){
+  struct pointlist* pointlist = piece->pointlist;
+  while(pointlist != NULL){
     attron(COLOR_PAIR(piece->color));
-    int x = piece->matrix->xs[i];
-    int y = piece->matrix->ys[i];
-    mvwaddch(win, y,x, piece->sign);
+    mvwaddch(win, pointlist->y, pointlist->x, piece->sign);
     refresh();
+    pointlist = pointlist->next;
   }
 }
 
-void draw(WINDOW* win, struct piece* active, struct bottom* rest){
+void draw(WINDOW* win, struct piece* active, struct bottomlist* rest){
   wclear(win);
   draw_piece(win, active);
   wrefresh(win);
@@ -57,16 +46,17 @@ struct piece* create_piece(char sign, int color, int xs[], int ys[], int length)
   struct piece* p = malloc(sizeof(struct piece*));
   p->color = 1;
   p->sign = sign;
-  p->matrix = malloc(sizeof(struct matrix*));
-  struct matrix* matrix = p->matrix;
-  matrix->length = length;
-  matrix->xs = calloc(length, sizeof(int));
-  matrix->ys = calloc(length, sizeof(int));
+
+  struct pointlist* pts = NULL;
 
   for(int i = 0; i < length; i++){
-    matrix->xs[i] = xs[i];
-    matrix->ys[i] = ys[i];
+    struct pointlist* head = malloc(sizeof(struct pointlist*));
+    head->x = xs[i];
+    head->y = ys[i];
+    head->next = pts;
+    pts = head;
   }
+  p->pointlist = pts;
   return p;
 }
 
@@ -87,10 +77,11 @@ void translate_piece(struct piece* piece, enum  direction dir){
     break;
   }
 
-  int i;
-  for(i = 0; i < piece->matrix->length; i++) {
-    piece->matrix->ys[i] += y;
-    piece->matrix->xs[i] += x;
+  struct pointlist* pointlist = piece->pointlist;
+  while(pointlist != NULL){
+    pointlist->x += x;
+    pointlist->y += y;
+    pointlist = pointlist->next;
   }
 }
 
@@ -136,7 +127,7 @@ int main(int argc, char** argv){
 
     if(clock() - clk_last >= FRAME_DURATION){
 
-      if(box->matrix->ys[1] < HEIGHT){
+      if(box->pointlist->y < HEIGHT){
         translate_piece(box, DOWN);
       }
 

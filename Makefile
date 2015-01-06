@@ -1,2 +1,2 @@
 all:
-	gcc -std=c99 -Wall tetris.c -lncurses -o tetris.out
+	gcc -std=c99 -W -Wall tetris.c -lncurses -o tetris.out

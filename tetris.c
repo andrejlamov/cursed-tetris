@@ -4,7 +4,7 @@
 
 #define WIDTH 20
 #define HEIGHT 20
-#define FRAME_DURATION (0.25*CLOCKS_PER_SEC)
+#define CLOCKS_PER_FRAME (0.25*CLOCKS_PER_SEC)
 
 enum direction {LEFT, RIGHT, DOWN};
 
@@ -42,6 +42,7 @@ void draw(WINDOW* win, struct piece* active, struct bottomlist* rest){
   wrefresh(win);
 }
 
+// Origin must be the first element in xs and ys.
 struct piece* create_piece(char sign, int color, int xs[], int ys[], int length){
   struct piece* p = malloc(sizeof(struct piece*));
   p->color = 1;
@@ -49,7 +50,8 @@ struct piece* create_piece(char sign, int color, int xs[], int ys[], int length)
 
   struct pointlist* pts = NULL;
 
-  for(int i = 0; i < length; i++){
+  // Loop backwards to set origin at the head position.
+  for(int i = length-1; i > -1; i--){
     struct pointlist* head = malloc(sizeof(struct pointlist*));
     head->x = xs[i];
     head->y = ys[i];
@@ -85,11 +87,29 @@ void translate_piece(struct piece* piece, enum  direction dir){
   }
 }
 
+void rotate_piece(struct piece* piece){
+  struct pointlist* pointlist = piece->pointlist;
+
+  // Get origin to translate back to correct position after rotation.
+  int ox = pointlist->x;
+  int oy = pointlist->y;
+
+  while(pointlist != NULL){
+    int x = pointlist->x;
+    int y = pointlist->y;
+    pointlist->x = (y-oy) + ox;
+    pointlist->y = -(x-ox) + oy;
+    pointlist = pointlist->next;
+  }
+}
+
 int main(int argc, char** argv){
-  struct piece* box = create_piece('#', 1, (int[]) {0,1,0,1}, (int[]) {0,0,1,1}, 4);
+  struct piece* box = create_piece('#', 1, (int[]) {0,1,2,3}, (int[]) {0,0,0,0}, 4);
+  struct piece* the_T_piece = create_piece('#', 1, (int[]) {1,0,2,1}, (int[]) {0,0,0,1}, 4);
+  struct piece* current_piece = the_T_piece;
 
   initscr();
-  // init colors
+  // Init colors
   start_color();
   int c;
   for(c = 0; c < 8; c++) {
@@ -100,39 +120,43 @@ int main(int argc, char** argv){
   timeout(0);
   keypad(stdscr, TRUE);
 
-  // game loop
+  // Game loop
   clock_t clk_last = clock();
 
-  // inital draw
-  draw(stdscr, box, NULL);
+  // Inital draw
+  draw(stdscr, current_piece, NULL);
 
   while(true){
 
     int key = getch();
     switch (key) {
     case KEY_LEFT:
-      translate_piece(box, LEFT);
-      draw(stdscr, box, NULL);
+      translate_piece(current_piece, LEFT);
+      draw(stdscr, current_piece, NULL);
       break;
     case KEY_RIGHT:
-      translate_piece(box, RIGHT);
-      draw(stdscr, box, NULL);
+      translate_piece(current_piece, RIGHT);
+      draw(stdscr, current_piece, NULL);
       break;
     case KEY_DOWN:
-      translate_piece(box, DOWN);
-      draw(stdscr, box, NULL);
+      translate_piece(current_piece, DOWN);
+      draw(stdscr, current_piece, NULL);
+    case ' ':
+      rotate_piece(current_piece);
+      draw(stdscr, current_piece, NULL);
+      break;
     default:
       break;
     }
 
-    if(clock() - clk_last >= FRAME_DURATION){
+    if(clock() - clk_last >= CLOCKS_PER_FRAME){
 
-      if(box->pointlist->y < HEIGHT){
-        translate_piece(box, DOWN);
+      if(current_piece->pointlist->y < HEIGHT){
+        translate_piece(current_piece, DOWN);
       }
 
       clk_last = clock();
-      draw(stdscr, box, NULL);
+      draw(stdscr, current_piece, NULL);
     }
 
   }

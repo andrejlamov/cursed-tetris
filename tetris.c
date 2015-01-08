@@ -180,19 +180,18 @@ void draw_piece(WINDOW* win, struct piece* piece){
     attron(COLOR_PAIR(piece->color));
     mvwaddch(win, pointlist->y, pointlist->x, piece->pixel);
     pointlist = pointlist->next;
+    attroff(COLOR_PAIR(1));
   }
 }
 
 void draw(WINDOW* win, struct piece* active, struct bottomlist* bottom){
   wclear(win);
   draw_piece(win, active);
-  refresh();
   if(bottom != NULL){
     struct bottomlist* bot = bottom;
     while(bot != NULL){
       if(bot->piece != NULL){
         draw_piece(win, bot->piece);
-        refresh();
       }
       bot = bot->next;
     }
@@ -224,14 +223,6 @@ int main(int argc, char** argv){
   draw(stdscr, current_piece, bottom);
 
   while(true){
-    if(collision_occured(current_piece, bottom)){
-      struct bottomlist* bottom0 = malloc(sizeof(struct bottomlist*));
-      bottom0->piece = current_piece;
-      bottom0->next = bottom;
-      bottom = bottom0;
-      current_piece = create_random_termino();
-    }
-
     int key = getch();
     switch (key) {
     case KEY_LEFT:
@@ -253,6 +244,15 @@ int main(int argc, char** argv){
     default:
       break;
     }
+
+    if(collision_occured(current_piece, bottom)){
+      struct bottomlist* bottom0 = malloc(sizeof(struct bottomlist*));
+      bottom0->piece = current_piece;
+      bottom0->next = bottom;
+      bottom = bottom0;
+      current_piece = create_random_termino();
+    }
+
     if(clock() - clk_last >= CLOCKS_PER_FRAME){
       translate_piece(current_piece, DOWN);
       clk_last = clock();

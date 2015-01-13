@@ -8,104 +8,105 @@
 
 #define NR_OF_NCURSES_COLORS 7
 
-#define NR_OF_TERMINOS 3
-char termino_sign[] = {'T', 'I', 'O'};
+#define TERMINO {T, I, O}
+enum termino TERMINO;
+const enum termino terminos[] = TERMINO;
 
 enum direction {LEFT, RIGHT, DOWN};
 
 struct pointlist {
   int x;
   int y;
-  struct pointlist* next;
+  struct pointlist* tail;
 };
 
 struct piece {
-  struct pointlist* pointlist;
+  struct pointlist* points;
   char pixel;
   int color;
 };
 
-struct bottomlist {
-  struct piece* piece;
-  struct bottomlist* next;
+struct piecelist {
+  struct piece* p;
+  struct piecelist* tail;
 };
 
 // Origin must be the first element in xs and ys.
 struct piece* create_piece(char pixel, int color, int xs[], int ys[], int length){
-  struct piece* p = malloc(sizeof(struct piece*));
-  p->color = color;
-  p->pixel = pixel;
+  struct piece* new_piece = malloc(sizeof(struct piece*));
+  new_piece->color = color;
+  new_piece->pixel = pixel;
 
-  struct pointlist* pts = NULL;
+  struct pointlist* points = NULL;
 
   // Loop backwards to set origin at the head position.
   for(int i = length-1; i > -1; i--){
     struct pointlist* head = malloc(sizeof(struct pointlist*));
     head->x = xs[i];
     head->y = ys[i];
-    head->next = pts;
-    pts = head;
+    head->tail = points;
+    points = head;
   }
-  p->pointlist = pts;
-  return p;
+  new_piece->points = points;
+  return new_piece;
 }
 
-void translate_piece(struct piece* piece, enum  direction dir){
-  int x = 0;
-  int y = 0;
+void translate_piece0(struct piece* piece, int x, int y){
+  struct pointlist* points = piece->points;
+  while(points != NULL){
+    points->x += x;
+    points->y += y;
+    points = points->tail;
+  }
+}
+
+void translate_piece1(struct piece* piece, enum direction dir){
   switch (dir) {
   case LEFT:
-    x = -1;
+    translate_piece0(piece, -1, 0);
     break;
   case RIGHT:
-    x = 1;
+    translate_piece0(piece, 1, 0);
     break;
   case DOWN:
-    y = 1;
+    translate_piece0(piece, 0, 1);
     break;
   default:
     break;
   }
-
-  struct pointlist* pointlist = piece->pointlist;
-  while(pointlist != NULL){
-    pointlist->x += x;
-    pointlist->y += y;
-    pointlist = pointlist->next;
-  }
 }
 
 void rotate_piece(struct piece* piece){
-  struct pointlist* pointlist = piece->pointlist;
+  struct pointlist* points = piece->points;
 
   // Get origin to translate back to correct position after rotation.
-  int ox = pointlist->x;
-  int oy = pointlist->y;
+  int ox = points->x;
+  int oy = points->y;
 
-  while(pointlist != NULL){
-    int x = pointlist->x;
-    int y = pointlist->y;
-    pointlist->x = (y-oy) + ox;
-    pointlist->y = -(x-ox) + oy;
-    pointlist = pointlist->next;
+  while(points != NULL){
+    int x = points->x;
+    int y = points->y;
+    points->x = (y-oy) + ox;
+    points->y = -(x-ox) + oy;
+    points = points->tail;
   }
 }
 
-struct piece* create_termino(char sign, int color) {
+struct piece* create_termino(enum termino term, int color) {
   int* xs;
   int* ys;
   int length = 4;
 
-  switch (sign) {
-  case 'T':
+  switch (term) {
+  case T:
     xs = (int[]) {1,0,2,1};
     ys = (int[]) {0,0,0,1};
     break;
-  case 'I':
+  case I:
     xs = (int[]) {0,0,0,0};
     ys = (int[]) {0,1,2,3};
     break;
-  case 'O':
+  case O:
     xs = (int[]) {0,1,0,1};
     ys = (int[]) {0,0,1,1};
     break;
@@ -117,86 +118,125 @@ struct piece* create_termino(char sign, int color) {
 }
 
 struct piece* create_random_termino(){
-  char sign = termino_sign[rand() % NR_OF_TERMINOS];
+  enum termino term = terminos[rand() % (sizeof(terminos) / sizeof(enum termino))];
   int color = rand() % NR_OF_NCURSES_COLORS;
-  return create_termino(sign, color);
+  return create_termino(term, color);
 }
 
-
-int pieces_collide(struct piece* higher_piece, struct piece* lower_piece){
-  if(higher_piece == NULL || lower_piece == NULL) {
+int for_some_point0(int (*prop)(int, int), struct piece* p){
+  if(p == NULL || prop == NULL) {
     return 0;
   }
 
-  struct pointlist* higher_pointlist = higher_piece->pointlist;
+  struct pointlist* points = p->points;
 
-  // For each point in the higher piece, test if it collides with some point in the lower piece.
-  while(higher_pointlist != NULL){
-    int hx = higher_pointlist->x;
-    int hy = higher_pointlist->y;
-    struct pointlist* lower_pointlist = lower_piece->pointlist;
-    while(lower_pointlist != NULL) {
-      int lx = lower_pointlist->x;
-      int ly = lower_pointlist->y;
-      if(hy + 1 == ly && lx == hx){
+  while(points != NULL){
+    int x = points->x;
+    int y = points->y;
+
+    if(prop(x,y)){
+      return 1;
+    }
+    points = points->tail;
+  }
+  return 0;
+}
+
+
+int for_some_point1(int (*prop)(int, int, int, int), struct piece* p0, struct piece* p1){
+  if(p0 == NULL || p1 == NULL || prop == NULL) {
+    return 0;
+  }
+
+  struct pointlist* p0_points = p0->points;
+
+  while(p0_points != NULL){
+    int mx = p0_points->x;
+    int my = p0_points->y;
+    struct pointlist* p1_points = p1->points;
+    while(p1_points != NULL) {
+      int sx = p1_points->x;
+      int sy = p1_points->y;
+      if(prop(mx, my, sx, sy)){
         return 1;
       }
-      lower_pointlist = lower_pointlist->next;
+      p1_points = p1_points->tail;
     }
-    higher_pointlist = higher_pointlist->next;
+    p0_points = p0_points->tail;
   }
 
   return 0;
 }
 
-int collision_occured(struct piece* piece, struct bottomlist* bottom){
 
-  // Collision with some piece
-  if(bottom != NULL){
-    struct bottomlist* bot = bottom;
-    while(bot != NULL){
-      if(pieces_collide(piece, bot->piece)){
-        return 1;
-      }
-      bot = bot->next;
-    }
+
+int for_some_piece(int (*prop)(struct piece*, struct piece*), struct piece* p0, struct piecelist* bottom0){
+  if(bottom0 == NULL){
+    return 0;
   }
 
-  // Or did the ground stop us...
-  struct pointlist* pointlist = piece->pointlist;
-  while(pointlist != NULL){
-    int y = pointlist->y;
-    if(y + 1 == HEIGHT){
+  struct piecelist* bottom = bottom0;
+  while(bottom != NULL){
+    if(prop(p0, bottom->p)){
       return 1;
     }
-    pointlist = pointlist->next;
+    bottom = bottom->tail;
   }
+
   return 0;
+}
+
+int points_overlap(int x0, int y0, int x1, int y1){
+  return x0 == x1 && y0 == y1;
+}
+
+int y_points_will_overlap(int x0, int y0, int x1, int y1){
+  return x0 == x1 && y0 + 1 == y1;
+}
+
+int pieces_overlap(struct piece* p0, struct piece* p1){
+  return for_some_point1(points_overlap, p0, p1);
+}
+
+int pieces_will_overlap(struct piece* p0, struct piece* p1){
+  return for_some_point1(y_points_will_overlap, p0, p1);
+}
+
+int point_will_hit_y_border(int x, int y){
+  return y + 1 == HEIGHT;
+}
+
+int point_hit_x_border(int x, int y){
+  return x == WIDTH || x == -1;
 }
 
 void draw_piece(WINDOW* win, struct piece* piece){
-  struct pointlist* pointlist = piece->pointlist;
-  while(pointlist != NULL){
+  struct pointlist* points = piece->points;
+  while(points != NULL){
     attron(COLOR_PAIR(piece->color));
-    mvwaddch(win, pointlist->y, pointlist->x, piece->pixel);
-    pointlist = pointlist->next;
+    mvwaddch(win, points->y, points->x, piece->pixel);
+    points = points->tail;
     attroff(COLOR_PAIR(1));
   }
 }
 
-void draw(WINDOW* win, struct piece* active, struct bottomlist* bottom){
+void draw(WINDOW* win, struct piece* active, struct piecelist* bottom0){
   wclear(win);
   draw_piece(win, active);
-  if(bottom != NULL){
-    struct bottomlist* bot = bottom;
-    while(bot != NULL){
-      if(bot->piece != NULL){
-        draw_piece(win, bot->piece);
+  if(bottom0 != NULL){
+    struct piecelist* bottom = bottom0;
+    while(bottom != NULL){
+      if(bottom->p != NULL){
+        draw_piece(win, bottom->p);
       }
-      bot = bot->next;
+      bottom = bottom->tail;
     }
   }
   wrefresh(win);
+}
+
+int full_row(struct piecelist* bottom){
+  return 0;
 }
 
 int main(int argc, char** argv){
@@ -213,12 +253,14 @@ int main(int argc, char** argv){
   timeout(0);
   keypad(stdscr, TRUE);
 
-  struct bottomlist* bottom = NULL;malloc(sizeof(struct bottomlist*));
+  struct piecelist* bottom = NULL;
 
   // Game loop
   clock_t clk_last = clock();
 
   struct piece* current_piece = create_random_termino();
+  translate_piece0(current_piece, WIDTH/2, 0);
+
   // Inital draw
   draw(stdscr, current_piece, bottom);
 
@@ -226,15 +268,25 @@ int main(int argc, char** argv){
     int key = getch();
     switch (key) {
     case KEY_LEFT:
-      translate_piece(current_piece, LEFT);
+      translate_piece1(current_piece, LEFT);
+      if(for_some_piece(pieces_overlap, current_piece, bottom)
+         || for_some_point0(point_hit_x_border, current_piece)){
+        translate_piece1(current_piece, RIGHT);
+        break;
+      }
       draw(stdscr, current_piece, bottom);
       break;
     case KEY_RIGHT:
-      translate_piece(current_piece, RIGHT);
+      translate_piece1(current_piece, RIGHT);
+      if(for_some_piece(pieces_overlap, current_piece, bottom)
+         || for_some_point0(point_hit_x_border,current_piece)){
+        translate_piece1(current_piece, LEFT);
+        break;
+      }
       draw(stdscr, current_piece, bottom);
       break;
     case KEY_DOWN:
-      translate_piece(current_piece, DOWN);
+      translate_piece1(current_piece, DOWN);
       draw(stdscr, current_piece, bottom);
       break;
     case ' ':
@@ -245,16 +297,21 @@ int main(int argc, char** argv){
       break;
     }
 
-    if(collision_occured(current_piece, bottom)){
-      struct bottomlist* bottom0 = malloc(sizeof(struct bottomlist*));
-      bottom0->piece = current_piece;
-      bottom0->next = bottom;
+    if(for_some_piece(pieces_will_overlap, current_piece, bottom)
+       || for_some_point0(point_will_hit_y_border,current_piece)){
+
+      // Make it a part of the bottom
+      struct piecelist* bottom0 = malloc(sizeof(struct piecelist*));
+      bottom0->p = current_piece;
+      bottom0->tail = bottom;
       bottom = bottom0;
+      // New current piece
       current_piece = create_random_termino();
+      translate_piece0(current_piece, WIDTH/2, 0);
     }
 
     if(clock() - clk_last >= CLOCKS_PER_FRAME){
-      translate_piece(current_piece, DOWN);
+      translate_piece1(current_piece, DOWN);
       clk_last = clock();
       draw(stdscr, current_piece, bottom);
     }

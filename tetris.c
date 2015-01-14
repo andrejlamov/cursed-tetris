@@ -2,7 +2,7 @@
 #include <curses.h>
 #include <time.h>
 
-#define WIDTH 20
+#define WIDTH 10
 #define HEIGHT 20
 #define CLOCKS_PER_FRAME (0.25*CLOCKS_PER_SEC)
 
@@ -51,11 +51,11 @@ struct piece* create_piece(char pixel, int color, int xs[], int ys[], int length
   return new_piece;
 }
 
-void translate_piece0(struct piece* piece, int x, int y){
+void translate_piece0(struct piece* piece, int dx, int dy){
   struct pointlist* points = piece->points;
   while(points != NULL){
-    points->x += x;
-    points->y += y;
+    points->x += dx;
+    points->y += dy;
     points = points->tail;
   }
 }
@@ -92,23 +92,26 @@ void rotate_piece(struct piece* piece){
   }
 }
 
-struct piece* create_termino(enum termino term, int color) {
+struct piece* create_termino(enum termino term, int color0) {
   int* xs;
   int* ys;
   int length = 4;
-
+  int color = 0;
   switch (term) {
   case T:
     xs = (int[]) {1,0,2,1};
     ys = (int[]) {0,0,0,1};
+    color = 0;
     break;
   case I:
     xs = (int[]) {0,0,0,0};
     ys = (int[]) {0,1,2,3};
+    color = 1;
     break;
   case O:
     xs = (int[]) {0,1,0,1};
     ys = (int[]) {0,0,1,1};
+    color = 2;
     break;
   default:
     return NULL;
@@ -142,7 +145,6 @@ int for_some_point0(int (*prop)(int, int), struct piece* p){
   return 0;
 }
 
-
 int for_some_point1(int (*prop)(int, int, int, int), struct piece* p0, struct piece* p1){
   if(p0 == NULL || p1 == NULL || prop == NULL) {
     return 0;
@@ -167,8 +169,6 @@ int for_some_point1(int (*prop)(int, int, int, int), struct piece* p0, struct pi
 
   return 0;
 }
-
-
 
 int for_some_piece(int (*prop)(struct piece*, struct piece*), struct piece* p0, struct piecelist* bottom0){
   if(bottom0 == NULL){
@@ -235,8 +235,64 @@ void draw(WINDOW* win, struct piece* active, struct piecelist* bottom0){
   wrefresh(win);
 }
 
-int full_row(struct piecelist* bottom){
-  return 0;
+
+void remove_points(int h, struct piecelist* bottom0){
+    struct piecelist* bottom = bottom0;
+    while(bottom != NULL){
+      struct pointlist* points = bottom->p->points;
+      while(points != NULL){
+        if(points->y == h && points->tail == NULL){
+          bottom->p->points = NULL;
+          free(points);
+        } else if(points->tail != NULL){
+          if(points->tail->y == h){
+            struct pointlist* tail = points->tail;
+            points->tail = tail->tail;
+            free(tail);
+            continue;
+          } else if(points->y == h){
+            struct pointlist* temp = points->tail;
+            bottom->p->points = temp;
+            free(points);
+            points = temp;
+            continue;
+          }
+        }
+        points = points->tail;
+      }
+      bottom = bottom->tail;
+    }
+    bottom = bottom0;
+    while(bottom != NULL){
+      struct pointlist* points = bottom->p->points;
+      while(points != NULL){
+        if(points->y < y){
+          points->y += +1;
+        }
+        points = points->tail;
+      }
+      bottom = bottom->tail;
+    }
+}
+
+void remove_full_rows(struct piecelist* bottom0){
+  for(int h = HEIGHT; h >= 0; h--){
+    int x = WIDTH;
+    struct piecelist* bottom = bottom0;
+    while(bottom != NULL){
+      struct pointlist* points = bottom->p->points;
+      while(points != NULL){
+        if(points->y == i){
+          x--;
+          if(x == 0){
+            remove_points(h, bottom0);
+          }
+        }
+        points = points->tail;
+      }
+      bottom = bottom->tail;
+    }
+  }
 }
 
 int main(int argc, char** argv){
@@ -309,6 +365,8 @@ int main(int argc, char** argv){
       current_piece = create_random_termino();
       translate_piece0(current_piece, WIDTH/2, 0);
     }
+
+    remove_full_rows(bottom);
 
     if(clock() - clk_last >= CLOCKS_PER_FRAME){
       translate_piece1(current_piece, DOWN);

@@ -266,7 +266,7 @@ void remove_points(int h, struct piecelist* bottom0){
     while(bottom != NULL){
       struct pointlist* points = bottom->p->points;
       while(points != NULL){
-        if(points->y < y){
+        if(points->y < h){
           points->y += +1;
         }
         points = points->tail;
@@ -282,7 +282,7 @@ void remove_full_rows(struct piecelist* bottom0){
     while(bottom != NULL){
       struct pointlist* points = bottom->p->points;
       while(points != NULL){
-        if(points->y == i){
+        if(points->y == h){
           x--;
           if(x == 0){
             remove_points(h, bottom0);
